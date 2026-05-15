@@ -1,6 +1,7 @@
 # 🗒️ AI 자동 회의록 생성기
 
-> OpenAI Whisper + Claude / Gemini API를 활용한 한국어 회의 녹음 및 자동 회의록 작성 도구
+> OpenAI Whisper + Claude / Gemini API를 활용한 한국어 회의 녹음 및 자동 회의록 작성 도구  
+> **macOS · Windows 지원**
 
 ---
 
@@ -22,7 +23,7 @@
 
 - 🎙️ **실시간 마이크 녹음** 또는 **기존 오디오 파일** (mp3, wav, m4a 등) 입력
 - 📝 **OpenAI Whisper** 기반 고정밀 한국어 음성→텍스트 변환 (로컬 실행, 무료)
-- 👤 **화자 인식** (meeting_voice.py): 교수님별 목소리를 사전 등록해 발언자 자동 식별
+- 👤 **화자 인식** (`meeting_voice.py`): 교수님별 목소리를 사전 등록해 발언자 자동 식별
 - 🤖 **Claude 또는 Gemini API** 선택 가능 (`--api claude` / `--api gemini`)
 - 📄 결과물: **회의록 (.md)** + **원문 텍스트 (.txt)** 자동 저장
 - 👥 고정 참석자(보직/일반 교수) 명단 자동 포함
@@ -31,55 +32,190 @@
 
 ## 🖥️ 시스템 요구사항
 
-- **Python 3.10 이상**
-- **macOS** (다른 OS도 동작하나 macOS 기준으로 작성)
-- 인터넷 연결 (API 호출 및 Whisper 모델 최초 다운로드 시)
+| 항목 | 요구사항 |
+|------|----------|
+| Python | **3.10 이상** |
+| OS | macOS 12+, Windows 10/11 |
+| 인터넷 | API 호출 및 Whisper 모델 최초 다운로드 시 필요 |
+| 여유 용량 | Whisper medium 모델 기준 약 2GB |
 
 ---
 
 ## 📦 설치 방법
 
-### 1. 저장소 클론
+### 1. Python 설치
+
+<details>
+<summary>🍎 macOS</summary>
+
+[python.org](https://www.python.org/downloads/)에서 Python 3.12 다운로드 후 설치합니다.  
+설치 후 터미널에서 확인:
+```bash
+python3 --version
+```
+
+</details>
+
+<details>
+<summary>🪟 Windows</summary>
+
+1. [python.org](https://www.python.org/downloads/)에서 Python 3.12 다운로드
+2. 설치 시 **"Add Python to PATH"** 체크박스를 반드시 선택
+3. PowerShell(관리자)에서 확인:
+```powershell
+python --version
+```
+
+> **Windows에서 resemblyzer 설치 전 필수 작업**  
+> [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 를 설치해야 합니다.  
+> 설치 시 "C++를 사용한 데스크톱 개발" 항목을 선택하세요.
+
+</details>
+
+---
+
+### 2. 저장소 클론
 
 ```bash
-git clone https://github.com/<your-username>/meeting-minutes.git
+git clone https://github.com/jin0008/meeting-minutes.git
 cd meeting-minutes
 ```
 
-### 2. Python 패키지 설치
+---
+
+### 3. Python 패키지 설치
+
+<details>
+<summary>🍎 macOS</summary>
 
 ```bash
+pip3 install -r requirements.txt
+```
+
+**SSL 오류 발생 시** (python.org에서 Python 설치한 경우):
+```bash
+/Applications/Python\ 3.12/Install\ Certificates.command
+```
+
+</details>
+
+<details>
+<summary>🪟 Windows</summary>
+
+PowerShell을 **관리자 권한**으로 열고 실행:
+
+```powershell
 pip install -r requirements.txt
 ```
 
-> **macOS SSL 오류 발생 시** (python.org에서 Python을 설치한 경우):
-> ```bash
-> /Applications/Python\ 3.12/Install\ Certificates.command
-> ```
-
-### 3. API 키 설정
-
-사용할 LLM API 키를 환경변수로 설정합니다.
-
-**Claude API 사용 시** ([발급 링크](https://console.anthropic.com/)):
-```bash
-export ANTHROPIC_API_KEY="your-api-key-here"
+**webrtcvad 설치 오류 발생 시** (resemblyzer 의존 패키지):
+```powershell
+pip install webrtcvad-wheels
+pip install -r requirements.txt
 ```
 
-**Gemini API 사용 시** ([발급 링크](https://aistudio.google.com/app/apikey) — 무료 티어 제공):
+**mp3 파일 사용 시 FFmpeg 필요:**
+1. [ffmpeg.org](https://ffmpeg.org/download.html) 또는 winget으로 설치:
+```powershell
+winget install ffmpeg
+```
+2. 설치 후 PowerShell 재시작
+
+</details>
+
+---
+
+### 4. API 키 설정
+
+**Claude API** ([발급 링크](https://console.anthropic.com/)):
+
+<details>
+<summary>🍎 macOS</summary>
+
+```bash
+# 현재 세션에만 적용
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# 영구 적용 (~/.zshrc에 추가)
+echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+</details>
+
+<details>
+<summary>🪟 Windows</summary>
+
+```powershell
+# 현재 세션에만 적용 (PowerShell)
+$env:ANTHROPIC_API_KEY = "your-api-key-here"
+
+# 영구 적용 (재부팅 없이 유지)
+[System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "your-api-key-here", "User")
+```
+
+또는 GUI로 설정:  
+**Windows 검색 → "환경 변수" → 사용자 변수 → 새로 만들기**  
+변수 이름: `ANTHROPIC_API_KEY` / 변수 값: 발급받은 키
+
+</details>
+
+**Gemini API** ([발급 링크](https://aistudio.google.com/app/apikey) — 무료 티어 제공):
+
+<details>
+<summary>🍎 macOS</summary>
+
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
+
+# 영구 적용
+echo 'export GEMINI_API_KEY="your-api-key-here"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-> 매번 설정하지 않으려면 `~/.zshrc` 또는 `~/.bash_profile`에 위 줄을 추가하세요.
+</details>
 
-### 4. macOS 마이크 권한 허용 (직접 녹음 시)
+<details>
+<summary>🪟 Windows</summary>
 
-**시스템 설정 → 개인 정보 보호 및 보안 → 마이크** 에서 사용하는 터미널 앱(iTerm2 등)을 허용합니다.
+```powershell
+$env:GEMINI_API_KEY = "your-api-key-here"
+
+# 영구 적용
+[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "your-api-key-here", "User")
+```
+
+</details>
+
+---
+
+### 5. 마이크 권한 설정 (직접 녹음 시)
+
+<details>
+<summary>🍎 macOS</summary>
+
+**시스템 설정 → 개인 정보 보호 및 보안 → 마이크**  
+사용하는 터미널 앱(Terminal, iTerm2 등)을 허용합니다.
+
+</details>
+
+<details>
+<summary>🪟 Windows</summary>
+
+**설정 → 개인 정보 및 보안 → 마이크**  
+"앱이 마이크에 액세스하도록 허용"을 켠 다음 목록에서 PowerShell / Windows Terminal을 허용합니다.
+
+</details>
 
 ---
 
 ## 🚀 사용 방법
+
+> **macOS**: `python3` 명령어 사용  
+> **Windows**: `python` 명령어 사용  
+> 아래 예시는 `python` 기준으로 작성되어 있습니다.
+
+---
 
 ### `meeting.py` — 기본 버전 (화자 구분 없음)
 
@@ -115,10 +251,12 @@ python meeting.py run --file recording.wav --transcript-only
 
 #### Step 1. 목소리 등록 (최초 1회)
 
-각 교수님의 목소리를 등록합니다. 등록된 프로파일은 `~/.meeting_minutes/speaker_profiles/`에 영구 저장됩니다.
+등록된 프로파일은 아래 경로에 영구 저장됩니다.
+- **macOS**: `~/.meeting_minutes/speaker_profiles/`
+- **Windows**: `C:\Users\사용자명\.meeting_minutes\speaker_profiles\`
 
 ```bash
-# 마이크로 직접 녹음하여 등록 (20초간 자연스럽게 말씀하시면 됩니다)
+# 마이크로 직접 녹음 (20초간 자연스럽게 말씀하시면 됩니다)
 python meeting_voice.py enroll --part 주임교수
 python meeting_voice.py enroll --part 병원장
 python meeting_voice.py enroll --part 총무
@@ -176,7 +314,7 @@ python meeting_voice.py run --title "5월 교수회의" --api gemini
 # 기존 파일 사용
 python meeting_voice.py run --file meeting.mp3 --title "월례회의" --api claude
 
-# 화자 인식 없이 실행 (프로파일 미등록 시 자동 전환됨)
+# 화자 인식 없이 실행
 python meeting_voice.py run --title "회의" --api gemini --no-speaker-id
 ```
 
@@ -223,36 +361,50 @@ python meeting_voice.py run --title "회의" --api gemini --no-speaker-id
 ## 🔧 요구 패키지 (`requirements.txt`)
 
 ```
-sounddevice       # 마이크 녹음
-openai-whisper    # 음성→텍스트 (STT)
-resemblyzer       # 화자 인식 (meeting_voice.py 전용)
-librosa           # 오디오 처리
-numpy             # 수치 연산
-anthropic         # Claude API (선택)
-google-generativeai  # Gemini API (선택)
+sounddevice         # 마이크 녹음
+openai-whisper      # 음성→텍스트 (STT)
+resemblyzer         # 화자 인식 (meeting_voice.py 전용)
+librosa             # 오디오 처리
+numpy               # 수치 연산
+anthropic           # Claude API (선택)
+google-generativeai # Gemini API (선택)
 ```
 
 ---
 
 ## ❓ 자주 묻는 문제
 
-**Q. SSL 인증서 오류가 발생해요.**  
-A. macOS Python 설치 시 발생하는 문제입니다. 아래 명령어를 실행하세요:
+**Q. macOS에서 SSL 인증서 오류가 발생해요.**  
+A. 아래 명령어를 실행하세요:
 ```bash
 /Applications/Python\ 3.12/Install\ Certificates.command
 ```
 
+**Q. Windows에서 `webrtcvad` 설치 오류가 나요.**  
+A. Microsoft C++ Build Tools를 먼저 설치하거나, 아래 명령어로 미리 빌드된 버전을 설치하세요:
+```powershell
+pip install webrtcvad-wheels
+```
+
+**Q. Windows에서 mp3 파일을 인식 못해요.**  
+A. FFmpeg 설치가 필요합니다:
+```powershell
+winget install ffmpeg
+```
+
 **Q. 마이크가 인식되지 않아요.**  
-A. 시스템 설정 → 개인 정보 보호 및 보안 → 마이크에서 터미널 앱 권한을 허용해주세요.
+A. OS별 마이크 권한을 확인해주세요.  
+- macOS: 시스템 설정 → 개인 정보 보호 및 보안 → 마이크  
+- Windows: 설정 → 개인 정보 및 보안 → 마이크
 
 **Q. Whisper 모델 다운로드가 너무 오래 걸려요.**  
 A. `--whisper-model small`로 더 작은 모델을 사용하거나, 최초 1회 다운로드 후에는 빠르게 실행됩니다.
 
 **Q. 화자 인식 정확도를 높이려면?**  
-A. 목소리 등록 시 20~30초간 자연스러운 말투로 녹음해주세요. 조용한 환경에서 등록할수록 정확도가 높아집니다.
+A. 조용한 환경에서 20~30초간 자연스러운 말투로 등록해주세요.
 
 **Q. Gemini 모델을 찾을 수 없다는 오류가 나요.**  
-A. 스크립트가 자동으로 사용 가능한 최신 모델을 조회하므로, GEMINI_API_KEY가 올바르게 설정되어 있는지 확인해주세요.
+A. GEMINI_API_KEY가 올바르게 설정되어 있는지 확인해주세요. 스크립트가 사용 가능한 최신 모델을 자동 조회합니다.
 
 ---
 
