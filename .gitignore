@@ -1,0 +1,30 @@
+# 출력 파일
+output/
+
+# 목소리 프로파일 (개인정보 보호)
+speaker_profiles/
+*.npy
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# 환경변수 파일
+.env
+.env.*
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# 임시 파일
+tmp_segments/
+*.wav
+*.mp3
+*.m4a
