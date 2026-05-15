@@ -572,20 +572,197 @@ def generate_minutes_gemini(prompt: str) -> str:
 # ─────────────────────────────────────────────
 # 7. 파일 저장
 # ─────────────────────────────────────────────
+def minutes_to_docx(minutes: str, output_path: str, meeting_title: str, meeting_date: str):
+    """회의록 텍스트를 Word 문서로 변환합니다."""
+    try:
+        from docx import Document
+        from docx.shared import Pt, RGBColor, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+    except ImportError:
+        print("❌ python-docx가 설치되지 않았습니다: pip install python-docx")
+        return False
+
+    doc = Document()
+
+    # ── 페이지 여백 설정 ──
+    section = doc.sections[0]
+    section.top_margin    = Cm(2.5)
+    section.bottom_margin = Cm(2.5)
+    section.left_margin   = Cm(3.0)
+    section.right_margin  = Cm(2.5)
+
+    # ── 기본 폰트 설정 (한국어: 맑은 고딕) ──
+    doc.styles['Normal'].font.name = '맑은 고딕'
+    doc.styles['Normal'].font.size = Pt(10)
+    doc.styles['Normal'].element.rPr.rFonts.set(qn('w:eastAsia'), '맑은 고딕')
+
+    def set_heading_style(paragraph, level: int):
+        sizes  = {1: 16, 2: 13, 3: 11}
+        colors = {1: '1F4E79', 2: '2E75B6', 3: '404040'}
+        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run(paragraph.text)
+        run.font.name = '맑은 고딕'
+        run.font.size = Pt(sizes.get(level, 11))
+        run.font.bold = True
+        run.font.color.rgb = RGBColor.from_string(colors.get(level, '000000'))
+        run.element.rPr.rFonts.set(qn('w:eastAsia'), '맑은 고딕')
+
+    def add_inline_text(paragraph, text: str):
+        """**bold** 인라인 처리"""
+        parts = text.split('**')
+        for idx, part in enumerate(parts):
+            if not part:
+                continue
+            run = paragraph.add_run(part)
+            run.bold = (idx % 2 == 1)
+            run.font.name = '맑은 고딕'
+            run.font.size = Pt(10)
+            run.element.rPr.rFonts.set(qn('w:eastAsia'), '맑은 고딕')
+
+    def add_table(doc, table_lines: list):
+        """마크다운 표를 Word 표로 변환"""
+        rows = [l for l in table_lines
+                if not all(c in '|-: ' for c in l.replace('|', '').strip())]
+        if not rows:
+            return
+        parsed = [[c.strip() for c in r.split('|')[1:-1]] for r in rows]
+        n_cols = max(len(r) for r in parsed)
+        n_rows = len(parsed)
+
+        table = doc.add_table(rows=n_rows, cols=n_cols)
+        table.style = 'Table Grid'
+
+        for r_idx, cells in enumerate(parsed):
+            for c_idx in range(n_cols):
+                cell_text = cells[c_idx] if c_idx < len(cells) else ''
+                cell = table.rows[r_idx].cells[c_idx]
+                cell.text = ''
+                p = cell.paragraphs[0]
+                run = p.add_run(cell_text)
+                run.font.name = '맑은 고딕'
+                run.font.size = Pt(9)
+                run.element.rPr.rFonts.set(qn('w:eastAsia'), '맑은 고딕')
+                if r_idx == 0:
+                    run.bold = True
+                    tc = cell._tc
+                    tcPr = tc.get_or_add_tcPr()
+                    shd = OxmlElement('w:shd')
+                    shd.set(qn('w:val'), 'clear')
+                    shd.set(qn('w:color'), 'auto')
+                    shd.set(qn('w:fill'), 'D6E4F0')
+                    tcPr.append(shd)
+        doc.add_paragraph()
+
+    # ── 마크다운 파싱 ──
+    lines = minutes.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        if line.startswith('# ') and not line.startswith('## '):
+            p = doc.add_heading('', level=1)
+            p.clear()
+            run = p.add_run(line[2:].strip())
+            set_heading_style(p, 1)
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after  = Pt(4)
+
+        elif line.startswith('## '):
+            p = doc.add_heading('', level=2)
+            p.clear()
+            run = p.add_run(line[3:].strip())
+            set_heading_style(p, 2)
+            p.paragraph_format.space_before = Pt(12)
+            p.paragraph_format.space_after  = Pt(4)
+
+        elif line.startswith('### '):
+            p = doc.add_heading('', level=3)
+            p.clear()
+            run = p.add_run(line[4:].strip())
+            set_heading_style(p, 3)
+            p.paragraph_format.space_before = Pt(8)
+            p.paragraph_format.space_after  = Pt(2)
+
+        elif line.startswith('|'):
+            table_lines = []
+            while i < len(lines) and lines[i].startswith('|'):
+                table_lines.append(lines[i])
+                i += 1
+            add_table(doc, table_lines)
+            continue
+
+        elif line.startswith('- '):
+            p = doc.add_paragraph(style='List Bullet')
+            add_inline_text(p, line[2:].strip())
+            p.paragraph_format.space_after = Pt(1)
+
+        elif len(line) > 2 and line[0].isdigit() and line[1] in '. ':
+            p = doc.add_paragraph(style='List Number')
+            add_inline_text(p, line[line.index(' ')+1:].strip())
+            p.paragraph_format.space_after = Pt(1)
+
+        elif line.strip().startswith('---'):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(4)
+            p.paragraph_format.space_after  = Pt(4)
+            border = OxmlElement('w:pBdr')
+            bottom = OxmlElement('w:bottom')
+            bottom.set(qn('w:val'), 'single')
+            bottom.set(qn('w:sz'), '6')
+            bottom.set(qn('w:space'), '1')
+            bottom.set(qn('w:color'), 'AAAAAA')
+            border.append(bottom)
+            p._p.pPr.append(border)
+
+        elif line.strip().startswith('*') and line.strip().endswith('*') and not line.strip().startswith('**'):
+            p = doc.add_paragraph()
+            run = p.add_run(line.strip().strip('*'))
+            run.italic = True
+            run.font.size = Pt(8)
+            run.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+            run.font.name = '맑은 고딕'
+            run.element.rPr.rFonts.set(qn('w:eastAsia'), '맑은 고딕')
+
+        elif line.strip() == '':
+            pass
+
+        else:
+            if line.strip():
+                p = doc.add_paragraph()
+                add_inline_text(p, line.strip())
+                p.paragraph_format.space_after = Pt(2)
+
+        i += 1
+
+    doc.save(output_path)
+    return True
+
+
 def save_output(minutes: str, transcript: str, output_dir: str, title: str):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    safe_title = title.replace(" ", "_").replace("/", "-")
-    timestamp  = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    safe_title   = title.replace(" ", "_").replace("/", "-")
+    timestamp    = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    meeting_date = datetime.datetime.now().strftime("%Y년 %m월 %d일")
 
-    minutes_path    = os.path.join(output_dir, f"{timestamp}_{safe_title}_회의록.md")
+    # Word 문서 저장
+    docx_path = os.path.join(output_dir, f"{timestamp}_{safe_title}_회의록.docx")
+    if minutes_to_docx(minutes, docx_path, title, meeting_date):
+        print(f"\n📄 회의록 저장: {docx_path}")
+    else:
+        md_path = os.path.join(output_dir, f"{timestamp}_{safe_title}_회의록.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(minutes)
+        print(f"\n📄 회의록 저장: {md_path}")
+        docx_path = md_path
+
+    # 원문 텍스트 저장
     transcript_path = os.path.join(output_dir, f"{timestamp}_{safe_title}_원문.txt")
-
-    with open(minutes_path,    "w", encoding="utf-8") as f: f.write(minutes)
-    with open(transcript_path, "w", encoding="utf-8") as f: f.write(transcript)
-
-    print(f"\n📄 회의록 저장: {minutes_path}")
+    with open(transcript_path, "w", encoding="utf-8") as f:
+        f.write(transcript)
     print(f"📄 원문 저장:   {transcript_path}")
-    return minutes_path
+
+    return docx_path
 
 
 # ─────────────────────────────────────────────

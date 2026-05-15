@@ -15,6 +15,9 @@ librosa
 # numpy (수치 연산)
 numpy
 
+# Word 문서 생성
+python-docx
+
 # ── LLM API (둘 중 사용할 것만 설치해도 됩니다) ──
 
 # Claude API 사용 시
